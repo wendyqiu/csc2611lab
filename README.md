@@ -10,8 +10,7 @@ Python or Jupyter Notebook file that replicates all of the findings that you rep
 PDF write-up [5 points].
 
 1 Synchronic word embedding [7 points]
-Step 1. Download the pre-trained word2vec embeddings from https://code.google.com/
-archive/p/word2vec/, specifically, the file \GoogleNews-vectors-negative300.bin.gz".
+Step 1. Download the pre-trained word2vec embeddings from https://code.google.com/archive/p/word2vec/, specifically, the file GoogleNews-vectors-negative300.bin.gz".
 
 Step 2. Using gensim, extract embeddings of words in Table 1 of RG65 that also appeared in
 the set W from the earlier exericse, i.e., the pairs of words should be identical in all analyses.
