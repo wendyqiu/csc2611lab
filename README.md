@@ -1,6 +1,7 @@
-# csc2611lab
+# csc2611-lab
 
 CSC2611 Lab: Word embedding and semantic change
+
 In this lab, you will explore the word embedding model word2vec and extend the analyses
 in the earlier exercise to both synchronic and diachronic settings. Deliverable: Submit a
 single PDF report (with your name on the first page) that addresses all the questions [15
@@ -16,8 +17,10 @@ Step 2. Using gensim, extract embeddings of words in Table 1 of RG65 that also a
 the set W from the earlier exericse, i.e., the pairs of words should be identical in all analyses.
 An example use of gensim is provided below.
 > from gensim.models import KeyedVectors
+
 > model = KeyedVectors.load word2vec format('GoogleNews-vectors-negative300.bin',
 binary=True)
+
 > model['dog']
 
 Step 3. Calculate cosine distance between each pair of word embeddings you have extracted,
