@@ -61,7 +61,8 @@ def part_one():
 
     # step 4: analogy test on pre-trained word2vec embeddings vs. LSA (300 dimensions)
     # test_path = join(LOCAL_DIR, 'test/test.txt')
-    test_path = join(LOCAL_DIR, 'test/word-test_v1.txt')
+    syntactic_test_path = join(LOCAL_DIR, 'test/syntactic.txt')
+    semantic_test_path = join(LOCAL_DIR, 'test/semantic.txt')
 
     word2vec_correct_count = 0
     lsa_correct_count = 0
@@ -69,7 +70,7 @@ def part_one():
     test_counter = 0
 
     full_test_set = []
-    with open(test_path, 'r', encoding='utf-8') as fp:
+    with open(semantic_test_path, 'r', encoding='utf-8') as fp:
         lines = fp.readlines()
         total_counter = len(lines)
         for line in lines:
@@ -156,13 +157,12 @@ def k_cluster(old_embedding, new_embedding, k=5):
                 curr_new = np.array(new_embedding[j].reshape(1, -1))
                 new_sim = cosine_similarity(curr_new, curr)[0][0]
                 new_sim_list.append([new_sim, j])
-        # For both models, get a similarity vector between the focus word and top-k neighbor words
         new_sim_list.sort(key=lambda x: x[0], reverse=True)
         old_sim_list.sort(key=lambda x: x[0], reverse=True)
         closest_new_neighbour = new_sim_list[:k]
         closest_old_neighbour = old_sim_list[:k]
         meta_neighbor_idx = list(set(x[1] for x in closest_new_neighbour) | set(y[1] for y in closest_old_neighbour))
-
+        # For both models, get a similarity vector between the focus word and top-k neighbor words
         vec1 = [cosine_similarity(curr, np.array(old_embedding[idx].reshape(1, -1)))[0][0] for idx in meta_neighbor_idx]
         vec2 = [cosine_similarity(curr, np.array(new_embedding[idx].reshape(1, -1)))[0][0] for idx in meta_neighbor_idx]
 
@@ -414,14 +414,10 @@ def part_two():
         # X_scaled = scaler.fit_transform([after_embedding[x] for x in closest_new_neighbour])
 
 
-
-
-
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    # TODO: uncomment part one
-    # print("executing part one function...")
-    # part_one()
+    print("executing part one function...")
+    part_one()
     print("executing part two function...")
     part_two()
 
