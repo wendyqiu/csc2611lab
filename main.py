@@ -7,14 +7,29 @@ Wendy Qiu 2021.02.01
 import wordpairs
 import numpy as np
 from gensim.models import KeyedVectors
-from os.path import join
+from os.path import join, exists
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.stats import pearsonr, spearmanr
 from scipy.spatial import distance
 import pickle
-from statistics import mean
+from prettytable import PrettyTable
 
 LOCAL_DIR = 'C:/Users/Ronghui/Documents/csc2611/lab/'
+
+
+def pickle_save(file_path, file):
+    print("saving python pickles at: {}".format(file_path))
+    outfile = open(file_path, 'wb')
+    pickle.dump(file, outfile)
+    outfile.close()
+
+
+def load_pickle(file_path):
+    print("loading python pickles at: {}".format(file_path))
+    infile = open(file_path, 'rb')
+    result = pickle.load(infile)
+    infile.close()
+    return result
 
 
 def part_one():
@@ -42,9 +57,7 @@ def part_one():
 
     # unpickle the LSA-300 embedding
     filename = join(LOCAL_DIR, 'embeddings/exercise/df_m2_300_0.038')
-    infile = open(filename, 'rb')
-    df_M2_300 = pickle.load(infile)
-    infile.close()
+    df_M2_300 = load_pickle(filename)
 
     # step 4: analogy test on pre-trained word2vec embeddings vs. LSA (300 dimensions)
     # test_path = join(LOCAL_DIR, 'test/test.txt')
@@ -122,14 +135,14 @@ def basic_cosine_sim(old_embedding, new_embedding):
     all_sim_rank.sort(key=lambda x: x[0])
     top20 = all_sim_rank[:20]
     least20 = all_sim_rank[:-21:-1]
-    return [x[1] for x in top20], [x[1] for x in least20], all_sim_rank
+    return [x[1] for x in top20], [x[1] for x in least20], [x[1] for x in all_sim_rank]
 
 
 def k_cluster(old_embedding, new_embedding, k=5):
     """find top k nearest neighbours and compute their differences b/w 2 time periods
        semantic changes are defined as how much a word's k nearest neighbours shift between the periods
        (larger shifting average = larger change)"""
-    full_distance_rank = []
+    full_sim_rank = []
     for i in range(len(old_embedding)):     # i is the focus word
         old_sim_list = []
         new_sim_list = []
@@ -138,26 +151,30 @@ def k_cluster(old_embedding, new_embedding, k=5):
         for j in range(len(old_embedding)):
             if i != j:
                 curr_old = np.array(old_embedding[j].reshape(1, -1))
-                old_sim = cosine_similarity(curr_old, curr)
-                old_sim_list.append(old_sim)
+                old_sim = cosine_similarity(curr_old, curr)[0][0]
+                old_sim_list.append([old_sim, j])
                 curr_new = np.array(new_embedding[j].reshape(1, -1))
-                new_sim = cosine_similarity(curr_new, curr)
-                new_sim_list.append(new_sim)
+                new_sim = cosine_similarity(curr_new, curr)[0][0]
+                new_sim_list.append([new_sim, j])
         # For both models, get a similarity vector between the focus word and top-k neighbor words
         new_sim_list.sort(key=lambda x: x[0], reverse=True)
         old_sim_list.sort(key=lambda x: x[0], reverse=True)
-        closest_new_neighbour = new_sim_list[:5]
-        closest_old_neighbour = old_sim_list[:5]
+        closest_new_neighbour = new_sim_list[:k]
+        closest_old_neighbour = old_sim_list[:k]
+        meta_neighbor_idx = list(set(x[1] for x in closest_new_neighbour) | set(y[1] for y in closest_old_neighbour))
+
+        vec1 = [cosine_similarity(curr, np.array(old_embedding[idx].reshape(1, -1)))[0][0] for idx in meta_neighbor_idx]
+        vec2 = [cosine_similarity(curr, np.array(new_embedding[idx].reshape(1, -1)))[0][0] for idx in meta_neighbor_idx]
 
         # Compute the cosine distance between those similarity vectors:
         # a measure of the relative semantic shift for this word between these two models
-        dist = distance.cosine(closest_new_neighbour, closest_old_neighbour)
-        full_distance_rank.append([dist, i])
-    full_distance_rank.sort(key=lambda x: x[0], reverse=True)
-    print("full_distance_rank: ".format(full_distance_rank))
-    top20 = full_distance_rank[:20]
-    least20 = full_distance_rank[:-21:-1]
-    return [x[1] for x in top20], [x[1] for x in least20], full_distance_rank
+        dist = cosine_similarity(np.array(vec1).reshape(1, -1), np.array(vec2).reshape(1, -1))[0][0]
+        full_sim_rank.append([dist, i])
+    full_sim_rank.sort(key=lambda x: x[0])
+    print("full_distance_rank: ".format(full_sim_rank))
+    top20 = full_sim_rank[:20]
+    least20 = full_sim_rank[:-21:-1]
+    return [x[1] for x in top20], [x[1] for x in least20], [x[1] for x in full_sim_rank]
 
 
 def rank_all(old_embedding, new_embedding):
@@ -165,7 +182,7 @@ def rank_all(old_embedding, new_embedding):
        that include all other the words in the embedding, based on the cosine distance of a word to the origin
        compute the Spearman's rank correlation coefficient of these 2 ranking list
        the amount of semantic change is defined as the inverse of the Spearman's value
-       (smaller value = larger change)"""
+       (the closer the value is to 0, the larger the change is)"""
     rank_score = []
     for i in range(len(old_embedding)):
         rank_old = []
@@ -186,12 +203,44 @@ def rank_all(old_embedding, new_embedding):
         rank_old.sort(key=lambda x: x[0])
         coef, _ = spearmanr([x[1] for x in rank_new], [x[1] for x in rank_old])
         rank_score.append([coef, i])
-    # rank_score.sort(key=lambda x: x[0])
-    sorted_rank_score = [sorted(item[0], key=abs) for item in rank_score]
+    print("rank_score: {}".format(rank_score))
+    sorted_rank_score = sorted(rank_score, key=lambda x: abs(x[0]))
     print("sorted_rank_score: {}".format(sorted_rank_score))
-    top20 = sorted_rank_score[:20]
-    least20 = sorted_rank_score[:-21:-1]
-    return [x[1] for x in top20], [x[1] for x in least20], sorted_rank_score
+    least20 = sorted_rank_score[:20]
+    top20 = sorted_rank_score[:-21:-1]
+    return [x[1] for x in top20], [x[1] for x in least20], [x[1] for x in sorted_rank_score]
+
+
+def read_test(test_path):
+    full_test_set = []
+    with open(test_path, 'r', encoding='utf-8') as fp:
+        lines = fp.readlines()
+        for line in lines:
+            curr_test_set = line.split()
+            full_test_set.append(curr_test_set)
+    return full_test_set
+
+
+
+
+def evaluate_method(diachronic_word_list, ordered_list):
+    """3 test files are created based on the <Statistically Significant Detection of Linguistic Change> paper
+       each file contains several words that undergo semantic changes
+       the p-value indicates the significance of the change (inverse)
+    """
+    test1_path = join(LOCAL_DIR, 'test/semantic_change_test1.txt')
+    test_set_1 = read_test(test1_path)
+    tests
+
+    test2_path = join(LOCAL_DIR, 'test/semantic_change_test2.txt')
+    test_set_2 = read_test(test2_path)
+
+    test3_path = join(LOCAL_DIR, 'test/semantic_change_test3.txt')
+    test_set_3 = read_test(test3_path)
+
+
+
+
 
 
 def part_two():
@@ -199,9 +248,7 @@ def part_two():
 
     # unpickle the LSA-300 embedding
     diachronic_emb_path = join(LOCAL_DIR, 'embeddings/embeddings_downloaded/data.pkl')
-    infile = open(diachronic_emb_path, 'rb')
-    diachronic_dict = pickle.load(infile)
-    infile.close()
+    diachronic_dict = load_pickle(diachronic_emb_path)
     # The file is a dictionary that contains the following entries:
     # 'w': a list of 2000 words, a subset of the English lexicon
     # 'd': a list of decades between 1900 and 2000
@@ -216,34 +263,64 @@ def part_two():
         new_embedding.append(each_word[9])
 
     # step 2: three methods to measure degree of semantic change for each word
+    save_methods_dir = join(LOCAL_DIR, 'checkpoint')
+
     diachronic_word_list = diachronic_dict['w']
-    basic_cosine_top20, basic_cosine_least20, basic_full_list = basic_cosine_sim(old_embedding, new_embedding)
-    print("basic_cosine_top20 indexes: {}".format(basic_cosine_top20))
-    print("basic_cosine_least20 indexes: {}".format(basic_cosine_least20))
-    basic_cosine_top_words = [diachronic_word_list[i] for i in basic_cosine_top20]
-    basic_cosine_bot_words = [diachronic_word_list[i] for i in basic_cosine_least20]
-    print("basic_cosine_top_words: {}".format(basic_cosine_top_words))
-    print("basic_cosine_bot_words: {}".format(basic_cosine_bot_words))
+    if exists(join(save_methods_dir, 'basic_full_list.pkl')):
+        basic_full_list = load_pickle(join(save_methods_dir, 'basic_full_list.pkl'))
+    else:
+        basic_cosine_top20, basic_cosine_least20, basic_full_list = basic_cosine_sim(old_embedding, new_embedding)
+        print("basic_cosine_top20 indexes: {}".format(basic_cosine_top20))
+        print("basic_cosine_least20 indexes: {}".format(basic_cosine_least20))
+        basic_cosine_top_words = [diachronic_word_list[i] for i in basic_cosine_top20]
+        basic_cosine_bot_words = [diachronic_word_list[i] for i in basic_cosine_least20]
+        print("basic_cosine_top_words: {}".format(basic_cosine_top_words))
+        print("basic_cosine_bot_words: {}".format(basic_cosine_bot_words))
+        pickle_save(join(save_methods_dir, 'basic_full_list.pkl'), basic_full_list)
 
-    k_cluster_top20, k_cluster_least20, cluster_full_list = k_cluster(old_embedding, new_embedding, k=5)
-    print("k_cluster_top20 indexes: {}".format(k_cluster_top20))
-    print("k_cluster_least20 indexes: {}".format(k_cluster_least20))
-    cluster_top_words = [diachronic_word_list[i] for i in k_cluster_top20]
-    cluster_bot_words = [diachronic_word_list[i] for i in k_cluster_least20]
-    print("cluster_top_words: {}".format(cluster_top_words))
-    print("cluster_bot_words: {}".format(cluster_bot_words))
-    input("continue?")
+    if exists(join(save_methods_dir, 'cluster_full_list.pkl')):
+        cluster_full_list = load_pickle(join(save_methods_dir, 'cluster_full_list.pkl'))
+    else:
+        k_cluster_top20, k_cluster_least20, cluster_full_list = k_cluster(old_embedding, new_embedding, k=5)
+        print("k_cluster_top20 indexes: {}".format(k_cluster_top20))
+        print("k_cluster_least20 indexes: {}".format(k_cluster_least20))
+        cluster_top_words = [diachronic_word_list[i] for i in k_cluster_top20]
+        cluster_bot_words = [diachronic_word_list[i] for i in k_cluster_least20]
+        print("cluster_top_words: {}".format(cluster_top_words))
+        print("cluster_bot_words: {}".format(cluster_bot_words))
+        pickle_save(join(save_methods_dir, 'cluster_full_list.pkl'), cluster_full_list)
 
-    rank_top20, rank_least20, rank_full_list = rank_all(old_embedding, new_embedding)
-    print("rank_top20 indexes: {}".format(rank_top20))
-    print("rank_least20 indexes: {}".format(rank_least20))
-    ranking_top_words = [diachronic_word_list[i] for i in rank_top20]
-    ranking_bot_words = [diachronic_word_list[i] for i in rank_least20]
-    print("ranking_top_words: {}".format(ranking_top_words))
-    print("ranking_bot_words: {}".format(ranking_bot_words))
+    if exists(join(save_methods_dir, 'rank_full_list.pkl')):
+        rank_full_list = load_pickle(join(save_methods_dir, 'rank_full_list.pkl'))
+    else:
+        rank_top20, rank_least20, rank_full_list = rank_all(old_embedding, new_embedding)
+        print("rank_top20 indexes: {}".format(rank_top20))
+        print("rank_least20 indexes: {}".format(rank_least20))
+        ranking_top_words = [diachronic_word_list[i] for i in rank_top20]
+        ranking_bot_words = [diachronic_word_list[i] for i in rank_least20]
+        print("ranking_top_words: {}".format(ranking_top_words))
+        print("ranking_bot_words: {}".format(ranking_bot_words))
+        pickle_save(join(save_methods_dir, 'rank_full_list.pkl'), rank_full_list)
 
     # step 2: Measure the inter-correlations (of semantic change in all words) among the three methods
-    basic_full_list
+    b_k = pearsonr(np.array(basic_full_list), np.array(cluster_full_list))
+    b_r = pearsonr(np.array(basic_full_list), np.array(rank_full_list))
+    k_r = pearsonr(np.array(cluster_full_list), np.array(rank_full_list))
+    table_header = ['Methods', 'Basic Cosine', 'k-cluster', 'Full Ranking']
+    corr_table = PrettyTable(table_header)
+    self = pearsonr(np.array(basic_full_list), np.array(basic_full_list))
+    corr_table.add_row(['Basic Cosine', [round(num, 3) for num in self], [round(num, 3) for num in b_k],
+                        [round(num, 3) for num in b_r]])
+    self = pearsonr(np.array(cluster_full_list), np.array(cluster_full_list))
+    corr_table.add_row(['cluster', [round(num, 3) for num in b_k], [round(num, 3) for num in self],
+                        [round(num, 3) for num in k_r]])
+    self = pearsonr(np.array(rank_full_list), np.array(rank_full_list))
+    corr_table.add_row(['Full Ranking', [round(num, 3) for num in b_r], [round(num, 3) for num in k_r],
+                        [round(num, 3) for num in self]])
+    print(corr_table)
+
+
+
 
 
 
