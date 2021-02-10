@@ -226,8 +226,10 @@ def perform_test(diachronic_word_list, ordered_list, test_set):
     test_words = [test_tuple[0] for test_tuple in test_set]
     test_values = [float(test_tuple[1]) for test_tuple in test_set]
     word_idx_list = [diachronic_word_list.index(word) for word in test_words]
+    print("word_idx_list: {}".format(word_idx_list))
+    print("ordered_list: {}".format(ordered_list))
     test_word_list = [ordered_list.index(each_idx) for each_idx in ordered_list if each_idx in word_idx_list]
-    # print("test_word_list vs. test_values: {0} vs. {1}".format(test_word_list, test_values))
+    print("test_word_list vs. test_values: {0} vs. {1}".format(test_word_list, test_values))
     return pearsonr(np.array(test_values), np.array(test_word_list))
 
 
@@ -237,7 +239,7 @@ def evaluate_method(diachronic_word_list, full_list):
        the p-value indicates the significance of the change (inverse)
        ordered_list: [(value, idx)]
     """
-    ordered_list = [x[0] for x in full_list]
+    ordered_list = [x[1] for x in full_list]
     test1_path = join(LOCAL_DIR, 'test/semantic_change_test1.txt')
     test_set_1 = read_test(test1_path)
     score_1 = perform_test(diachronic_word_list, ordered_list, test_set_1)
@@ -263,14 +265,12 @@ def evaluate_method(diachronic_word_list, full_list):
 def detect_point_of_change(embedding_single_word):
     """given a word embedding for the 10 decades, find where the steepest change occurs"""
     period_change_list = []
-    change = 0
-    max_idx = None
     for i in range(len(embedding_single_word)-1):
         curr_decade = embedding_single_word[i]
         next_decade = embedding_single_word[i+1]
         curr_sim = cosine_similarity(np.array(curr_decade).reshape(1, -1), np.array(next_decade).reshape(1, -1))[0][0]
-        curr_dis = distance.cosine(curr_decade, next_decade)
-        period_change_list.append([curr_sim, curr_dis, i])
+        period_change_list.append([curr_sim, i])
+    print("period_change_list: {}".format(period_change_list))
     return period_change_list
 
 
@@ -360,23 +360,30 @@ def part_two():
     top3_emb_list = [diachronic_dict['E'][i] for i in top3_idx]
 
     print("printing results for top3 changing words: ")
+    word_idx = 0
     for embedding_single_word in top3_emb_list:
         change_list = detect_point_of_change(embedding_single_word)
-        [curr_sim, curr_dis, i] = change_list
+        min_value = 1.0
+        min_idx = None
+        for pair in change_list:
+            if pair[0] != 0. and min_value >= pair[0]:
+                min_value = pair[0]
+                min_idx = pair[1]
+        print("min_idx: {}".format(min_idx))
+        curr_sim, decade_idx = change_list[min_idx]
         before_embedding = []
         after_embedding = []
         for each_word in diachronic_dict['E']:
-            old_embedding.append(each_word[i])
-            new_embedding.append(each_word[i+1])
+            before_embedding.append(each_word[decade_idx])
+            after_embedding.append(each_word[decade_idx+1])
         # find top neighbours
-        max_idx = max(map(lambda x: x[1], change_list))
-        print("max_idx: {}".format(max_idx))
-        curr = diachronic_word_list[i]
+        curr_word = top3_words[word_idx]
         old_sim_list = []
         new_sim_list = []
         for j in range(len(before_embedding)):
-            if max_idx != j:
+            if diachronic_word_list.index(curr_word) != j:
                 curr_old = np.array(before_embedding[j].reshape(1, -1))
+                curr = np.array(embedding_single_word[decade_idx]).reshape(1, -1)
                 old_sim = cosine_similarity(curr_old, curr)[0][0]
                 old_sim_list.append([old_sim, j])
                 curr_new = np.array(after_embedding[j].reshape(1, -1))
@@ -385,15 +392,19 @@ def part_two():
         # For both models, get a similarity vector between the focus word and top-k neighbor words
         new_sim_list.sort(key=lambda x: x[0], reverse=True)
         old_sim_list.sort(key=lambda x: x[0], reverse=True)
+        print("new_sim_list: {}".format(new_sim_list))
         closest_new_neighbour = new_sim_list[:5]
         closest_old_neighbour = old_sim_list[:5]
-        closest_old_neighbour_words = [before_embedding[x] for new_sim, x in closest_old_neighbour]
-        closest_new_neighbour_words = [after_embedding[x] for new_sim, x in closest_new_neighbour]
+        closest_old_neighbour_words = [diachronic_word_list[x] for new_sim, x in closest_old_neighbour]
+        closest_new_neighbour_words = [diachronic_word_list[x] for new_sim, x in closest_new_neighbour]
         print("for the focus word <{0}>, the semantic change occurs between {1} and {2}"
-              .format(curr, diachronic_dict['d'][i], diachronic_dict['d'][i+1]))
-        print("the top 5 closest words at {0}s are: {1}".format(diachronic_dict['d'][i], closest_old_neighbour_words))
-        print("the top 5 closest words at {0}s are: {1}".format(diachronic_dict['d'][i+1], closest_new_neighbour_words))
+              .format(curr_word, diachronic_dict['d'][decade_idx], diachronic_dict['d'][decade_idx+1]))
+        print("the top 5 closest words at {0}s are: {1}".format(diachronic_dict['d'][decade_idx],
+                                                                closest_old_neighbour_words))
+        print("the top 5 closest words at {0}s are: {1}".format(diachronic_dict['d'][decade_idx+1],
+                                                                closest_new_neighbour_words))
         print("the change_list: {}".format(change_list))
+        word_idx += 1
 
         # plot 2d neighbours
         # import matplotlib.pyplot as plt
