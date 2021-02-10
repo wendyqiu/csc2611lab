@@ -135,7 +135,7 @@ def basic_cosine_sim(old_embedding, new_embedding):
     all_sim_rank.sort(key=lambda x: x[0])
     top20 = all_sim_rank[:20]
     least20 = all_sim_rank[:-21:-1]
-    return [x[1] for x in top20], [x[1] for x in least20], [x[1] for x in all_sim_rank]
+    return [x[1] for x in top20], [x[1] for x in least20], all_sim_rank
 
 
 def k_cluster(old_embedding, new_embedding, k=5):
@@ -174,7 +174,7 @@ def k_cluster(old_embedding, new_embedding, k=5):
     print("full_distance_rank: ".format(full_sim_rank))
     top20 = full_sim_rank[:20]
     least20 = full_sim_rank[:-21:-1]
-    return [x[1] for x in top20], [x[1] for x in least20], [x[1] for x in full_sim_rank]
+    return [x[1] for x in top20], [x[1] for x in least20], full_sim_rank
 
 
 def rank_all(old_embedding, new_embedding):
@@ -208,7 +208,7 @@ def rank_all(old_embedding, new_embedding):
     print("sorted_rank_score: {}".format(sorted_rank_score))
     least20 = sorted_rank_score[:20]
     top20 = sorted_rank_score[:-21:-1]
-    return [x[1] for x in top20], [x[1] for x in least20], [x[1] for x in sorted_rank_score]
+    return [x[1] for x in top20], [x[1] for x in least20], sorted_rank_score
 
 
 def read_test(test_path):
@@ -221,26 +221,57 @@ def read_test(test_path):
     return full_test_set
 
 
+def perform_test(diachronic_word_list, ordered_list, test_set):
+    # print("test_set: {}".format(test_set))
+    test_words = [test_tuple[0] for test_tuple in test_set]
+    test_values = [float(test_tuple[1]) for test_tuple in test_set]
+    word_idx_list = [diachronic_word_list.index(word) for word in test_words]
+    test_word_list = [ordered_list.index(each_idx) for each_idx in ordered_list if each_idx in word_idx_list]
+    # print("test_word_list vs. test_values: {0} vs. {1}".format(test_word_list, test_values))
+    return pearsonr(np.array(test_values), np.array(test_word_list))
 
 
-def evaluate_method(diachronic_word_list, ordered_list):
+def evaluate_method(diachronic_word_list, full_list):
     """3 test files are created based on the <Statistically Significant Detection of Linguistic Change> paper
        each file contains several words that undergo semantic changes
        the p-value indicates the significance of the change (inverse)
+       ordered_list: [(value, idx)]
     """
+    ordered_list = [x[0] for x in full_list]
     test1_path = join(LOCAL_DIR, 'test/semantic_change_test1.txt')
     test_set_1 = read_test(test1_path)
-    tests
+    score_1 = perform_test(diachronic_word_list, ordered_list, test_set_1)
+    # print("pearsonr coef for test 1: {}".format(score_1))
 
     test2_path = join(LOCAL_DIR, 'test/semantic_change_test2.txt')
     test_set_2 = read_test(test2_path)
+    score_2 = perform_test(diachronic_word_list, ordered_list, test_set_2)
+    # print("pearsonr coef for test 2: {}".format(score_2))
 
     test3_path = join(LOCAL_DIR, 'test/semantic_change_test3.txt')
     test_set_3 = read_test(test3_path)
+    score_3 = perform_test(diachronic_word_list, ordered_list, test_set_3)
+    # print("pearsonr coef for test 3: {}".format(score_3))
+
+    len_1 = float(len(test_set_1))
+    len_2 = float(len(test_set_2))
+    len_3 = float(len(test_set_3))
+    final_score = (score_1[0] * len_1 + score_2[0] * len_2 + score_3[0] * len_3) / (len_1 + len_2 + len_3)
+    print("the final score is: {}".format(final_score))
 
 
-
-
+def detect_point_of_change(embedding_single_word):
+    """given a word embedding for the 10 decades, find where the steepest change occurs"""
+    period_change_list = []
+    change = 0
+    max_idx = None
+    for i in range(len(embedding_single_word)-1):
+        curr_decade = embedding_single_word[i]
+        next_decade = embedding_single_word[i+1]
+        curr_sim = cosine_similarity(np.array(curr_decade).reshape(1, -1), np.array(next_decade).reshape(1, -1))[0][0]
+        curr_dis = distance.cosine(curr_decade, next_decade)
+        period_change_list.append([curr_sim, curr_dis, i])
+    return period_change_list
 
 
 def part_two():
@@ -270,8 +301,6 @@ def part_two():
         basic_full_list = load_pickle(join(save_methods_dir, 'basic_full_list.pkl'))
     else:
         basic_cosine_top20, basic_cosine_least20, basic_full_list = basic_cosine_sim(old_embedding, new_embedding)
-        print("basic_cosine_top20 indexes: {}".format(basic_cosine_top20))
-        print("basic_cosine_least20 indexes: {}".format(basic_cosine_least20))
         basic_cosine_top_words = [diachronic_word_list[i] for i in basic_cosine_top20]
         basic_cosine_bot_words = [diachronic_word_list[i] for i in basic_cosine_least20]
         print("basic_cosine_top_words: {}".format(basic_cosine_top_words))
@@ -282,8 +311,6 @@ def part_two():
         cluster_full_list = load_pickle(join(save_methods_dir, 'cluster_full_list.pkl'))
     else:
         k_cluster_top20, k_cluster_least20, cluster_full_list = k_cluster(old_embedding, new_embedding, k=5)
-        print("k_cluster_top20 indexes: {}".format(k_cluster_top20))
-        print("k_cluster_least20 indexes: {}".format(k_cluster_least20))
         cluster_top_words = [diachronic_word_list[i] for i in k_cluster_top20]
         cluster_bot_words = [diachronic_word_list[i] for i in k_cluster_least20]
         print("cluster_top_words: {}".format(cluster_top_words))
@@ -294,32 +321,86 @@ def part_two():
         rank_full_list = load_pickle(join(save_methods_dir, 'rank_full_list.pkl'))
     else:
         rank_top20, rank_least20, rank_full_list = rank_all(old_embedding, new_embedding)
-        print("rank_top20 indexes: {}".format(rank_top20))
-        print("rank_least20 indexes: {}".format(rank_least20))
         ranking_top_words = [diachronic_word_list[i] for i in rank_top20]
         ranking_bot_words = [diachronic_word_list[i] for i in rank_least20]
         print("ranking_top_words: {}".format(ranking_top_words))
         print("ranking_bot_words: {}".format(ranking_bot_words))
         pickle_save(join(save_methods_dir, 'rank_full_list.pkl'), rank_full_list)
 
+    print("basic_full_list: {}".format(basic_full_list))
     # step 2: Measure the inter-correlations (of semantic change in all words) among the three methods
-    b_k = pearsonr(np.array(basic_full_list), np.array(cluster_full_list))
-    b_r = pearsonr(np.array(basic_full_list), np.array(rank_full_list))
-    k_r = pearsonr(np.array(cluster_full_list), np.array(rank_full_list))
+    b_k = pearsonr(np.array([x[1] for x in basic_full_list]), np.array([x[1] for x in cluster_full_list]))
+    b_r = pearsonr(np.array([x[1] for x in basic_full_list]), np.array([x[1] for x in rank_full_list]))
+    k_r = pearsonr(np.array([x[1] for x in cluster_full_list]), np.array([x[1] for x in rank_full_list]))
     table_header = ['Methods', 'Basic Cosine', 'k-cluster', 'Full Ranking']
     corr_table = PrettyTable(table_header)
-    self = pearsonr(np.array(basic_full_list), np.array(basic_full_list))
+    self = pearsonr(np.array([x[1] for x in basic_full_list]), np.array([x[1] for x in basic_full_list]))
     corr_table.add_row(['Basic Cosine', [round(num, 3) for num in self], [round(num, 3) for num in b_k],
                         [round(num, 3) for num in b_r]])
-    self = pearsonr(np.array(cluster_full_list), np.array(cluster_full_list))
+    self = pearsonr(np.array([x[1] for x in cluster_full_list]), np.array([x[1] for x in cluster_full_list]))
     corr_table.add_row(['cluster', [round(num, 3) for num in b_k], [round(num, 3) for num in self],
                         [round(num, 3) for num in k_r]])
-    self = pearsonr(np.array(rank_full_list), np.array(rank_full_list))
+    self = pearsonr(np.array([x[1] for x in rank_full_list]), np.array([x[1] for x in rank_full_list]))
     corr_table.add_row(['Full Ranking', [round(num, 3) for num in b_r], [round(num, 3) for num in k_r],
                         [round(num, 3) for num in self]])
     print(corr_table)
 
+    # step 3: evaluation
+    print("evaluation on the basic cosine method")
+    evaluate_method(diachronic_word_list, basic_full_list)
+    print("evaluation on k-cluster distance method")
+    evaluate_method(diachronic_word_list, cluster_full_list)
+    print("evaluation on ranking method")
+    evaluate_method(diachronic_word_list, rank_full_list)
 
+    # step 4: change point detection
+    """the top 3 words are: techniques, programs, objectives"""
+    top3_words = ['techniques', 'programs', 'objectives']
+    top3_idx = [diachronic_word_list.index(word) for word in top3_words]
+    top3_emb_list = [diachronic_dict['E'][i] for i in top3_idx]
+
+    print("printing results for top3 changing words: ")
+    for embedding_single_word in top3_emb_list:
+        change_list = detect_point_of_change(embedding_single_word)
+        [curr_sim, curr_dis, i] = change_list
+        before_embedding = []
+        after_embedding = []
+        for each_word in diachronic_dict['E']:
+            old_embedding.append(each_word[i])
+            new_embedding.append(each_word[i+1])
+        # find top neighbours
+        max_idx = max(map(lambda x: x[1], change_list))
+        print("max_idx: {}".format(max_idx))
+        curr = diachronic_word_list[i]
+        old_sim_list = []
+        new_sim_list = []
+        for j in range(len(before_embedding)):
+            if max_idx != j:
+                curr_old = np.array(before_embedding[j].reshape(1, -1))
+                old_sim = cosine_similarity(curr_old, curr)[0][0]
+                old_sim_list.append([old_sim, j])
+                curr_new = np.array(after_embedding[j].reshape(1, -1))
+                new_sim = cosine_similarity(curr_new, curr)[0][0]
+                new_sim_list.append([new_sim, j])
+        # For both models, get a similarity vector between the focus word and top-k neighbor words
+        new_sim_list.sort(key=lambda x: x[0], reverse=True)
+        old_sim_list.sort(key=lambda x: x[0], reverse=True)
+        closest_new_neighbour = new_sim_list[:5]
+        closest_old_neighbour = old_sim_list[:5]
+        closest_old_neighbour_words = [before_embedding[x] for new_sim, x in closest_old_neighbour]
+        closest_new_neighbour_words = [after_embedding[x] for new_sim, x in closest_new_neighbour]
+        print("for the focus word <{0}>, the semantic change occurs between {1} and {2}"
+              .format(curr, diachronic_dict['d'][i], diachronic_dict['d'][i+1]))
+        print("the top 5 closest words at {0}s are: {1}".format(diachronic_dict['d'][i], closest_old_neighbour_words))
+        print("the top 5 closest words at {0}s are: {1}".format(diachronic_dict['d'][i+1], closest_new_neighbour_words))
+        print("the change_list: {}".format(change_list))
+
+        # plot 2d neighbours
+        # import matplotlib.pyplot as plt
+        # from sklearn.manifold import MDS
+        # from sklearn.preprocessing import MinMaxScaler
+        # scaler = MinMaxScaler()
+        # X_scaled = scaler.fit_transform([after_embedding[x] for x in closest_new_neighbour])
 
 
 
