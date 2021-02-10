@@ -171,7 +171,7 @@ def k_cluster(old_embedding, new_embedding, k=5):
         dist = cosine_similarity(np.array(vec1).reshape(1, -1), np.array(vec2).reshape(1, -1))[0][0]
         full_sim_rank.append([dist, i])
     full_sim_rank.sort(key=lambda x: x[0])
-    print("full_distance_rank: ".format(full_sim_rank))
+    # print("full_distance_rank: ".format(full_sim_rank))
     top20 = full_sim_rank[:20]
     least20 = full_sim_rank[:-21:-1]
     return [x[1] for x in top20], [x[1] for x in least20], full_sim_rank
@@ -203,9 +203,9 @@ def rank_all(old_embedding, new_embedding):
         rank_old.sort(key=lambda x: x[0])
         coef, _ = spearmanr([x[1] for x in rank_new], [x[1] for x in rank_old])
         rank_score.append([coef, i])
-    print("rank_score: {}".format(rank_score))
+    # print("rank_score: {}".format(rank_score))
     sorted_rank_score = sorted(rank_score, key=lambda x: abs(x[0]))
-    print("sorted_rank_score: {}".format(sorted_rank_score))
+    # print("sorted_rank_score: {}".format(sorted_rank_score))
     least20 = sorted_rank_score[:20]
     top20 = sorted_rank_score[:-21:-1]
     return [x[1] for x in top20], [x[1] for x in least20], sorted_rank_score
@@ -226,10 +226,10 @@ def perform_test(diachronic_word_list, ordered_list, test_set):
     test_words = [test_tuple[0] for test_tuple in test_set]
     test_values = [float(test_tuple[1]) for test_tuple in test_set]
     word_idx_list = [diachronic_word_list.index(word) for word in test_words]
-    print("word_idx_list: {}".format(word_idx_list))
-    print("ordered_list: {}".format(ordered_list))
+    # print("word_idx_list: {}".format(word_idx_list))
+    # print("ordered_list: {}".format(ordered_list))
     test_word_list = [ordered_list.index(each_idx) for each_idx in ordered_list if each_idx in word_idx_list]
-    print("test_word_list vs. test_values: {0} vs. {1}".format(test_word_list, test_values))
+    # print("test_word_list vs. test_values: {0} vs. {1}".format(test_word_list, test_values))
     return pearsonr(np.array(test_values), np.array(test_word_list))
 
 
@@ -392,7 +392,7 @@ def part_two():
         # For both models, get a similarity vector between the focus word and top-k neighbor words
         new_sim_list.sort(key=lambda x: x[0], reverse=True)
         old_sim_list.sort(key=lambda x: x[0], reverse=True)
-        print("new_sim_list: {}".format(new_sim_list))
+        # print("new_sim_list: {}".format(new_sim_list))
         closest_new_neighbour = new_sim_list[:5]
         closest_old_neighbour = old_sim_list[:5]
         closest_old_neighbour_words = [diachronic_word_list[x] for new_sim, x in closest_old_neighbour]
@@ -403,7 +403,7 @@ def part_two():
                                                                 closest_old_neighbour_words))
         print("the top 5 closest words at {0}s are: {1}".format(diachronic_dict['d'][decade_idx+1],
                                                                 closest_new_neighbour_words))
-        print("the change_list: {}".format(change_list))
+        print("the change_list (how much semantic change in each decade): {}".format(change_list))
         word_idx += 1
 
         # plot 2d neighbours
